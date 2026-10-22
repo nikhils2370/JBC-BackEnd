@@ -1,0 +1,30 @@
+# Dependency directories (भारी फाइलें जिन्हें अपलोड नहीं करना है)
+node_modules/
+jspm_packages/
+
+# Private/Secret env variables (आपकी सीक्रेट कीज और पासवर्ड)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Logs (एरर और लॉग फाइल्स)
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build directories (अगर आप React/Next.js या TypeScript यूज़ कर रहे हैं)
+dist/
+build/
+.next/
+out/
+
+# IDEs and editors (आपके कोड एडिटर की पर्सनल सेटिंग्स)
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
