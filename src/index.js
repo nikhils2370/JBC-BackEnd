@@ -1,5 +1,5 @@
-require("dotenv").config();
-
+import dotenv from "dotenv";
+dotenv.config();
 const express = require("express");
 const cors = require("cors");
 
@@ -21,21 +21,25 @@ app.set("trust proxy", 1);
 // CORS configuration
 const allowedOrigins = [
   process.env.FRONTEND_URL,
+  process.env.FRONTEND_URL_PREVIEW,
   "http://localhost:3000",
 ].filter(Boolean);
 
 app.use(
   cors({
     origin: (origin, callback) => {
-      // Allow server-to-server and same-origin requests
+      // Allow requests without Origin and configured frontend origins
       if (!origin || allowedOrigins.includes(origin)) {
         return callback(null, true);
       }
 
+      console.error("Blocked CORS origin:", origin);
       return callback(new Error("Origin not allowed by CORS"));
     },
     credentials: true,
-  }),
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  })
 );
 
 // Body parsers
@@ -78,27 +82,41 @@ app.use((err, req, res, next) => {
 
   const isCorsError = err.message === "Origin not allowed by CORS";
 
-  res.status(isCorsError ? 403 : err.status || 500).json({
+  const statusCode = isCorsError
+    ? 403
+    : err.status && err.status < 500
+      ? err.status
+      : 500;
+
+  res.status(statusCode).json({
     success: false,
     message: isCorsError
       ? "Origin not allowed"
-      : err.status && err.status < 500
+      : statusCode < 500
         ? err.message
         : "Internal Server Error",
   });
 });
 
 // Start server
-const PORT = process.env.PORT || 5000;
-
 async function startServer() {
   try {
     await connectDB();
 
-    app.listen(PORT, "0.0.0.0", () => {
-      console.log(`JBC Backend running on port ${PORT}`);
+    // Render provides PORT as a port number.
+    // 0.0.0.0 is the host, not the port.
+    const PORT = Number(process.env.PORT) || 5000;
+    const HOST = "0.0.0.0";
+
+    const server = app.listen(PORT, HOST, () => {
+      console.log(`JBC Backend running on ${HOST}:${PORT}`);
       console.log("Health check: /api/health");
       console.log(`Environment: ${process.env.NODE_ENV || "development"}`);
+    });
+
+    server.on("error", (error) => {
+      console.error("HTTP server error:", error);
+      process.exit(1);
     });
   } catch (error) {
     console.error("Failed to start server:", error);
