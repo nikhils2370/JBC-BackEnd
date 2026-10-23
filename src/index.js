@@ -1,11 +1,11 @@
-const path = require("path");
-require("dotenv").config({ path: path.join(__dirname, "..", ".env") });
+require("dotenv").config();
+
 const express = require("express");
 const cors = require("cors");
-const connectDB = require("./config/db");
-const seedDatabase = require("./utils/seeder");
 
-// Import route handlers
+const connectDB = require("./config/db");
+
+// Routes
 const authRoutes = require("./routes/authRoutes");
 const heroRoutes = require("./routes/heroRoutes");
 const courseRoutes = require("./routes/courseRoutes");
@@ -15,26 +15,44 @@ const resultRoutes = require("./routes/resultRoutes");
 
 const app = express();
 
-// Middlewares
+// Trust Render proxy
+app.set("trust proxy", 1);
+
+// CORS configuration
+const allowedOrigins = [
+  process.env.FRONTEND_URL,
+  "http://localhost:3000",
+].filter(Boolean);
+
 app.use(
   cors({
-    origin: "*", // allow Next.js frontend
+    origin: (origin, callback) => {
+      // Allow server-to-server and same-origin requests
+      if (!origin || allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      return callback(new Error("Origin not allowed by CORS"));
+    },
     credentials: true,
-  })
+  }),
 );
+
+// Body parsers
 app.use(express.json({ limit: "15mb" }));
 app.use(express.urlencoded({ extended: true, limit: "15mb" }));
 
-// Health Check
+// Health check
 app.get("/api/health", (req, res) => {
-  res.json({
+  res.status(200).json({
+    success: true,
     status: "ok",
     service: "JBC Education Full-Stack API",
     time: new Date().toISOString(),
   });
 });
 
-// Register API Routes
+// API routes
 app.use("/api/auth", authRoutes);
 app.use("/api/hero", heroRoutes);
 app.use("/api/courses", courseRoutes);
@@ -42,32 +60,50 @@ app.use("/api/students", studentRoutes);
 app.use("/api/quizzes", quizRoutes);
 app.use("/api/results", resultRoutes);
 
-// Error Handling Middleware
-app.use((err, req, res, next) => {
-  console.error("Express Error:", err.stack);
-  res.status(err.status || 500).json({
+// Handle unknown API routes
+app.use("/api", (req, res) => {
+  res.status(404).json({
     success: false,
-    message: err.message || "Internal Server Error",
+    message: `Route not found: ${req.method} ${req.originalUrl}`,
   });
 });
 
-// Start Server & Connect Database
+// Error handler
+app.use((err, req, res, next) => {
+  if (res.headersSent) {
+    return next(err);
+  }
+
+  console.error("Express Error:", err.message);
+
+  const isCorsError = err.message === "Origin not allowed by CORS";
+
+  res.status(isCorsError ? 403 : err.status || 500).json({
+    success: false,
+    message: isCorsError
+      ? "Origin not allowed"
+      : err.status && err.status < 500
+        ? err.message
+        : "Internal Server Error",
+  });
+});
+
+// Start server
 const PORT = process.env.PORT || 5000;
 
-const startServer = async () => {
+async function startServer() {
   try {
     await connectDB();
-    await seedDatabase();
 
-    app.listen(PORT, () => {
-      console.log(`===============================================`);
-      console.log(` JBC Backend Server running on port ${PORT}`);
-      console.log(` Health check: http://localhost:${PORT}/api/health`);
-      console.log(`===============================================`);
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`JBC Backend running on port ${PORT}`);
+      console.log("Health check: /api/health");
+      console.log(`Environment: ${process.env.NODE_ENV || "development"}`);
     });
   } catch (error) {
-    console.error("Failed to start server:", error.message);
+    console.error("Failed to start server:", error);
+    process.exit(1);
   }
-};
+}
 
 startServer();
